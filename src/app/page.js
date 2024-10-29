@@ -1,4 +1,5 @@
 'use client';
+
 import { useState } from 'react';
 import AddressSearch from '@/components/AddressSearch';
 import TroveLifecycle from '@/components/TroveLifecycle';
@@ -20,7 +21,7 @@ export default function Home() {
       setTroveEvents([]);
       setRedemptionEvents([]);
       
-      // Get trove events
+      // Get trove events first
       setLoadingState('Searching for Trove interactions...');
       const troveData = await findAllTroveEvents(address);
       const sortedTroveData = troveData.sort((a, b) => a.timestamp - b.timestamp);
@@ -31,11 +32,11 @@ export default function Home() {
       const redemptionData = await findRedemptionEvents(address);
       setLoadingState(`Found ${redemptionData.length} redemptions. Analyzing previous states...`);
       
-      // Get previous states for each redemption
+      // Get previous states for each redemption, passing the trove events
       const enrichedRedemptions = await Promise.all(
         redemptionData.map(async (redemption, index) => {
           setLoadingState(`Analyzing state before redemption ${index + 1} of ${redemptionData.length}...`);
-          const prevState = await findPreviousTroveState(address, redemption.blockNumber);
+          const prevState = await findPreviousTroveState(address, redemption.blockNumber, sortedTroveData);
           return { ...redemption, previousState: prevState };
         })
       );
@@ -51,10 +52,11 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen p-8 bg-[var(--background)]">
-      <h1 className="text-4xl font-bold mb-8 text-center text-[var(--foreground)]">
+    <main className="min-h-screen p-8 bg-gray-900">
+      <h1 className="text-4xl font-bold mb-8 text-center text-gray-100">
         Trove Analytics
       </h1>
+      
       <AddressSearch onSearch={handleSearch} />
       
       {error && (
@@ -66,7 +68,19 @@ export default function Home() {
       {loading ? (
         <div className="space-y-4">
           <LoadingSpinner />
-          <p className="text-center text-gray-300">{loadingState}</p>
+          <div className="text-center">
+            <p className="text-gray-300 mb-2">{loadingState}</p>
+            {troveEvents.length > 0 && (
+              <p className="text-gray-400 text-sm">
+                Found {troveEvents.length} Trove interaction{troveEvents.length !== 1 ? 's' : ''}
+              </p>
+            )}
+            {redemptionEvents.length > 0 && (
+              <p className="text-gray-400 text-sm">
+                Found {redemptionEvents.length} redemption{redemptionEvents.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <>
@@ -81,9 +95,19 @@ export default function Home() {
           )}
           
           {redemptionEvents.length > 0 && (
-            <RedemptionSummary events={redemptionEvents} />
+            <RedemptionSummary 
+              events={redemptionEvents}
+              troveEvents={troveEvents} // Pass trove events to help with state lookups
+            />
           )}
         </>
+      )}
+
+      {(troveEvents.length > 0 || redemptionEvents.length > 0) && (
+        <footer className="mt-8 text-center text-gray-500 text-sm">
+          <p>All times shown in your local timezone</p>
+          <p>Data sourced from Cronos blockchain</p>
+        </footer>
       )}
     </main>
   );
