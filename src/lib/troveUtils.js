@@ -2,15 +2,15 @@ import { Web3 } from 'web3';
 import axios from 'axios';
 
 const web3 = new Web3();
-
+//contract info
 const REDEMPTION_CONTRACT = '0x7A47cF15a1fCbAd09c66077d1D021430eed7AC65';
 const TROVE_MANAGER = '0x80d32B0FE29A56dd4b6eD5BdcfD2D488db4878fb';
 const TROVE_UPDATED_TOPIC = '0xc3770d654ed33aeea6bf11ac8ef05d02a6a04ed4686dd2f624d853bbec43cc8b';
-
+//rate limit protection
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
+//find all trove events for user
 export async function findAllTroveEvents(address) {
   try {
     await delay(1000);
@@ -37,7 +37,7 @@ export async function findAllTroveEvents(address) {
         ['uint256', 'uint256', 'uint256', 'uint8'],
         log.data
       );
-
+//look for trove updated events (operation 3)
       return {
         txHash: log.transactionHash,
         blockNumber: parseInt(log.blockNumber, 16),
@@ -52,7 +52,7 @@ export async function findAllTroveEvents(address) {
     return [];
   }
 }
-
+//find redemption events associated with address
 export async function findRedemptionEvents(address) {
   try {
     await delay(1000);
@@ -96,7 +96,7 @@ export async function findRedemptionEvents(address) {
     return [];
   }
 }
-
+//find previous trove state, 
 export async function findPreviousTroveState(address, blockNumber, allTroveEvents = []) {
   try {
     // First attempt: Look for events right before the redemption
@@ -134,7 +134,7 @@ export async function findPreviousTroveState(address, blockNumber, allTroveEvent
       };
     }
 
-    // Second attempt: Use the trove lifecycle events we already have
+    // if no tx found: Use the closest transaction to the redemption found in the trove lifecycle events we already have
     if (allTroveEvents.length > 0) {
       // Find the most recent event before the redemption
       const previousEvents = allTroveEvents
