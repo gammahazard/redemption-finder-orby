@@ -1,4 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {};
-
-export default nextConfig;
+export default {
+    env: {
+      CRONOSCAN_API_KEY: process.env.CRONOSCAN_API_KEY
+    }
+  }
+  
