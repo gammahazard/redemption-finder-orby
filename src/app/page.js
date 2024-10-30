@@ -17,9 +17,19 @@ export default function Home() {
   const [troveEvents, setTroveEvents] = useState([]);
   const [redemptionEvents, setRedemptionEvents] = useState([]);
   const [error, setError] = useState('');
+  const [abortController, setAbortController] = useState(null);
 
   const handleSearch = async (address) => {
     try {
+      // Cancel any existing search
+      if (abortController) {
+        abortController.abort();
+      }
+
+      // Create new controller for this search
+      const controller = new AbortController();
+      setAbortController(controller);
+      
       setLoading(true);
       setError('');
       setTroveEvents([]);
@@ -27,11 +37,19 @@ export default function Home() {
       
       setLoadingState('Searching for Trove interactions...');
       const troveData = await findAllTroveEvents(address);
+      
+      // Check if search was aborted
+      if (controller.signal.aborted) return;
+      
       const sortedTroveData = troveData.sort((a, b) => a.timestamp - b.timestamp);
       setTroveEvents(sortedTroveData);
       setLoadingState(`Found ${troveData.length} Trove interactions. Searching for redemptions...`);
       
       const redemptionData = await findRedemptionEvents(address);
+      
+      // Check if search was aborted
+      if (controller.signal.aborted) return;
+      
       setLoadingState(`Found ${redemptionData.length} redemptions. Analyzing previous states...`);
 
       // Combine all events for accurate state tracking
@@ -39,11 +57,14 @@ export default function Home() {
       
       const enrichedRedemptions = await Promise.all(
         redemptionData.map(async (redemption, index) => {
+          // Check if search was aborted before each state analysis
+          if (controller.signal.aborted) return;
+          
           setLoadingState(`Analyzing state before redemption ${index + 1} of ${redemptionData.length}...`);
           const prevState = await findPreviousTroveState(
             address, 
             redemption.blockNumber,
-            allEvents // Pass combined events for accurate state tracking
+            allEvents
           );
           return { 
             ...redemption, 
@@ -56,17 +77,36 @@ export default function Home() {
         })
       );
       
+      // Final abort check before setting state
+      if (controller.signal.aborted) return;
+      
       // Sort redemptions by timestamp
       const sortedRedemptions = enrichedRedemptions.sort((a, b) => a.timestamp - b.timestamp);
       setRedemptionEvents(sortedRedemptions);
 
     } catch (err) {
-      setError('Error fetching data. Please try again.');
-      console.error(err);
+      // Only show error if the search wasn't aborted
+      if (!abortController?.signal.aborted) {
+        setError('Error fetching data. Please try again.');
+        console.error(err);
+      }
     } finally {
-      setLoading(false);
-      setLoadingState('');
+      // Only reset loading state if the search wasn't aborted
+      if (!abortController?.signal.aborted) {
+        setLoading(false);
+        setLoadingState('');
+        setAbortController(null);
+      }
     }
+  };
+
+  const handleTabChange = (tab) => {
+    // Cancel any ongoing search when switching tabs
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
+    setActiveTab(tab);
   };
 
   const renderSearchTab = () => (
@@ -122,22 +162,22 @@ export default function Home() {
         </>
       )}
 
-{(troveEvents.length > 0 || redemptionEvents.length > 0) && (
-    <footer className="mt-8 text-center text-gray-500 text-sm">
-        <p>All times shown in UTC timezone</p>
-        <div className="flex items-center justify-center gap-2 mt-1">
-            <span>Data sourced from
-        Cronos blockchain</span>
+      {(troveEvents.length > 0 || redemptionEvents.length > 0) && (
+        <footer className="mt-8 text-center text-gray-500 text-sm">
+          <p>All times shown in UTC timezone</p>
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <span>Data sourced from</span>
             <Image 
-                src="/cro-logo.png" 
-                alt="Cronos Logo" 
-                width={16} 
-                height={16} 
-                className="inline-block"
+              src="/cro-logo.png" 
+              alt="Cronos Logo" 
+              width={16} 
+              height={16} 
+              className="inline-block align-middle"
             />
-        </div>
-    </footer>
-)}
+            <span>Cronos blockchain</span>
+          </div>
+        </footer>
+      )}
     </>
   );
 
@@ -147,7 +187,7 @@ export default function Home() {
         Trove Analytics
       </h1>
       
-      <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabNav activeTab={activeTab} onTabChange={handleTabChange} />
       
       {activeTab === 'search' ? renderSearchTab() : <History />}
     </main>
