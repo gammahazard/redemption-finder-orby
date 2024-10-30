@@ -32,16 +32,33 @@ export default function Home() {
       
       const redemptionData = await findRedemptionEvents(address);
       setLoadingState(`Found ${redemptionData.length} redemptions. Analyzing previous states...`);
+
+      // Combine all events for accurate state tracking
+      const allEvents = [...sortedTroveData, ...redemptionData].sort((a, b) => a.timestamp - b.timestamp);
       
       const enrichedRedemptions = await Promise.all(
         redemptionData.map(async (redemption, index) => {
           setLoadingState(`Analyzing state before redemption ${index + 1} of ${redemptionData.length}...`);
-          const prevState = await findPreviousTroveState(address, redemption.blockNumber, sortedTroveData);
-          return { ...redemption, previousState: prevState };
+          const prevState = await findPreviousTroveState(
+            address, 
+            redemption.blockNumber,
+            allEvents // Pass combined events for accurate state tracking
+          );
+          return { 
+            ...redemption, 
+            previousState: prevState,
+            currentState: {
+              debt: redemption.debt,
+              collateral: redemption.collateral
+            }
+          };
         })
       );
       
-      setRedemptionEvents(enrichedRedemptions);
+      // Sort redemptions by timestamp
+      const sortedRedemptions = enrichedRedemptions.sort((a, b) => a.timestamp - b.timestamp);
+      setRedemptionEvents(sortedRedemptions);
+
     } catch (err) {
       setError('Error fetching data. Please try again.');
       console.error(err);
@@ -87,7 +104,12 @@ export default function Home() {
           )}
           
           {troveEvents.length > 0 && (
-            <TroveLifecycle events={troveEvents} />
+            <TroveLifecycle 
+              events={troveEvents.map(event => ({
+                ...event,
+                type: event.operation === 3 ? 'redemption' : 'adjustment'
+              }))} 
+            />
           )}
           
           {redemptionEvents.length > 0 && (

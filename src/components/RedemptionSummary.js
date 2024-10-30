@@ -1,4 +1,31 @@
 export default function RedemptionSummary({ events }) {
+    const calculateImpact = (redemption, previousState) => {
+      console.log(`\n==== Calculating Impact for Redemption ${redemption.txHash} ====`);
+      console.log('Previous State:', {
+        txHash: previousState.txHash,
+        collateral: previousState.collateral,
+        debt: previousState.debt,
+        source: previousState.source
+      });
+      console.log('After Redemption:', {
+        txHash: redemption.txHash,
+        collateral: redemption.collateral,
+        debt: redemption.debt
+      });
+  
+      const collateralRedeemed = Math.abs(parseFloat(previousState.collateral) - parseFloat(redemption.collateral));
+      const debtReduced = Math.abs(parseFloat(previousState.debt) - parseFloat(redemption.debt));
+  
+      console.log('Calculated Impact:', {
+        collateralRedeemed,
+        debtReduced,
+        calculation: `${previousState.collateral} - ${redemption.collateral} = ${collateralRedeemed} CDCETH`,
+        debtCalculation: `${previousState.debt} - ${redemption.debt} = ${debtReduced} USC`
+      });
+  
+      return { collateralRedeemed, debtReduced };
+    };
+  
     return (
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
         <h2 className="text-2xl font-bold mb-4 text-white">Redemption Summary</h2>
@@ -7,11 +34,25 @@ export default function RedemptionSummary({ events }) {
         ) : (
           <div className="space-y-6">
             {events.map((redemption, index) => {
+              console.log(`\n==== Processing Redemption ${index + 1} ====`);
+              console.log('Redemption:', {
+                txHash: redemption.txHash,
+                blockNumber: redemption.blockNumber,
+                timestamp: redemption.timestamp
+              });
+              
+              if (redemption.previousState) {
+                console.log('Found Previous State:', {
+                  txHash: redemption.previousState.txHash,
+                  blockNumber: redemption.previousState.blockNumber,
+                  source: redemption.previousState.source
+                });
+              } else {
+                console.log('No previous state found for this redemption');
+              }
+  
               const date = new Date(redemption.timestamp * 1000).toLocaleString();
-              const hasValidPreviousState = redemption.previousState && 
-                !redemption.previousState.note && 
-                redemption.previousState.txHash !== 'Unknown' && 
-                redemption.previousState.txHash !== 'Error';
+              const impacts = redemption.previousState ? calculateImpact(redemption, redemption.previousState) : null;
   
               return (
                 <div key={index} className="border-l-4 border-green-500 pl-4">
@@ -34,16 +75,12 @@ export default function RedemptionSummary({ events }) {
                     </a>
                   </div>
                   
-                  {hasValidPreviousState ? (
+                  {redemption.previousState ? (
                     <div className="mt-2">
                       <div className="font-medium text-white mb-2">
                         State of Trove prior to {events.length > 1 ? `${index + 1}${getSuffix(index + 1)}` : ''} redemption:
                       </div>
-                      {redemption.previousState.source === 'trove-lifecycle' && (
-                        <div className="text-xs text-yellow-400 mb-2 italic">
-                          No events found prior to redemption, using lifecycle transaction that is closest to redemption date
-                        </div>
-                      )}
+                   
                       <div className="bg-gray-700/50 p-3 rounded border-l-4 border-blue-500">
                         <div className="text-gray-200">
                           Collateral: {parseFloat(redemption.previousState.collateral).toFixed(4)} CDCETH
@@ -71,26 +108,26 @@ export default function RedemptionSummary({ events }) {
                         Debt: {parseFloat(redemption.debt).toFixed(4)} USC
                       </div>
   
-                      <div className="mt-4 bg-gray-700/30 p-3 rounded">
-                        <h4 className="font-medium text-white mb-2">Impact:</h4>
-                        <div className="text-gray-200">
-                          Collateral Redeemed: {(parseFloat(redemption.previousState.collateral) - parseFloat(redemption.collateral)).toFixed(4)} CDCETH
+                      {impacts && (
+                        <div className="mt-4 bg-gray-700/30 p-3 rounded">
+                          <h4 className="font-medium text-white mb-2">Impact:</h4>
+                          <div className="text-gray-200">
+                            Collateral Redeemed: {impacts.collateralRedeemed.toFixed(4)} CDCETH
+                          </div>
+                          <div className="text-gray-200">
+                            Debt Reduced: {impacts.debtReduced.toFixed(4)} USC
+                          </div>
                         </div>
-                        <div className="text-gray-200">
-                          Debt Reduced: {(parseFloat(redemption.previousState.debt) - parseFloat(redemption.debt)).toFixed(4)} USC
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="mt-2 p-3 bg-yellow-900/20 border-l-4 border-yellow-600 rounded">
-                      <p className="text-yellow-200">
-                        Previous state data is not available for this redemption. This can happen if:
+                    <div className="mt-2 p-3 bg-red-900/20 border-l-4 border-red-600 rounded">
+                      <p className="text-red-200">
+                        Error: Failed to retrieve trove state for this redemption. This should not happen.
                       </p>
-                      <ul className="list-disc list-inside mt-2 text-yellow-100 text-sm">
-                        <li>The redemption occurred in the same block as another transaction</li>
-                        <li>The data is too old or has been pruned</li>
-                        <li>There was an issue retrieving the historical data</li>
-                      </ul>
+                      <p className="text-red-200 text-sm mt-2">
+                        Please report this issue: Block {redemption.blockNumber}, Tx {redemption.txHash}
+                      </p>
                     </div>
                   )}
                 </div>

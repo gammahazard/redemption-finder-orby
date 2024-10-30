@@ -4,15 +4,31 @@ import axios from 'axios';
 const web3 = new Web3();
 const REDEMPTION_CONTRACT = '0x7A47cF15a1fCbAd09c66077d1D021430eed7AC65';
 const TROVE_MANAGER = '0x80d32B0FE29A56dd4b6eD5BdcfD2D488db4878fb';
-const CDCETH_TOKEN = '0x7a7c9db510aB29A2FC362a4c34260BEcB5cE3446;'; // Replace with actual CDCETH token address
+const CDCETH_TOKEN = '0x7a7c9db510aB29A2FC362a4c34260BEcB5cE3446';
 const TROVE_UPDATED_TOPIC = '0xc3770d654ed33aeea6bf11ac8ef05d02a6a04ed4686dd2f624d853bbec43cc8b';
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
-//rate limit protection
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-//find all trove events for user
+
+// Helper function to parse event data
+function parseEventData(log) {
+  const decodedData = web3.eth.abi.decodeParameters(
+    ['uint256', 'uint256', 'uint256', 'uint8'],
+    log.data
+  );
+
+  return {
+    txHash: log.transactionHash,
+    blockNumber: parseInt(log.blockNumber, 16),
+    timestamp: parseInt(log.timeStamp, 16),
+    debt: web3.utils.fromWei(decodedData[0], 'ether'),
+    collateral: web3.utils.fromWei(decodedData[1], 'ether'),
+    operation: parseInt(decodedData[3])
+  };
+}
+
 export async function findAllTroveEvents(address) {
   try {
     await delay(1000);
@@ -34,27 +50,13 @@ export async function findAllTroveEvents(address) {
       return [];
     }
 
-    return response.data.result.map(log => {
-      const decodedData = web3.eth.abi.decodeParameters(
-        ['uint256', 'uint256', 'uint256', 'uint8'],
-        log.data
-      );
-//look for trove updated events (operation 3)
-      return {
-        txHash: log.transactionHash,
-        blockNumber: parseInt(log.blockNumber, 16),
-        timestamp: parseInt(log.timeStamp, 16),
-        debt: web3.utils.fromWei(decodedData[0], 'ether'),
-        collateral: web3.utils.fromWei(decodedData[1], 'ether'),
-        operation: parseInt(decodedData[3])
-      };
-    });
+    return response.data.result.map(parseEventData);
   } catch (error) {
     console.error('Error finding trove events:', error);
     return [];
   }
 }
-//find redemption events associated with address
+
 export async function findRedemptionEvents(address) {
   try {
     await delay(1000);
@@ -76,113 +78,95 @@ export async function findRedemptionEvents(address) {
       return [];
     }
 
-    const events = response.data.result.map(log => {
-      const decodedData = web3.eth.abi.decodeParameters(
-        ['uint256', 'uint256', 'uint256', 'uint8'],
-        log.data
-      );
-
-      return {
-        txHash: log.transactionHash,
-        blockNumber: parseInt(log.blockNumber, 16),
-        timestamp: parseInt(log.timeStamp, 16),
-        debt: web3.utils.fromWei(decodedData[0], 'ether'),
-        collateral: web3.utils.fromWei(decodedData[1], 'ether'),
-        operation: parseInt(decodedData[3])
-      };
-    });
-
+    const events = response.data.result.map(parseEventData);
     return events.filter(e => e.operation === 3);
   } catch (error) {
     console.error('Error finding redemption events:', error);
     return [];
   }
 }
-//find previous trove state, 
-export async function findPreviousTroveState(address, blockNumber, allTroveEvents = [], attempt = 0, maxRetries = 3) {
-    try {
-      console.log(`Attempting to find previous state for block ${blockNumber} (Attempt ${attempt + 1}/${maxRetries + 1})`);
-  
-      // First attempt: Look for events right before the redemption
-      await delay(1000);
-      const response = await axios.get('https://api.cronoscan.com/api', {
-        params: {
-          module: 'logs',
-          action: 'getLogs',
-          fromBlock: 0,
-          toBlock: blockNumber - 1,
-          address: TROVE_MANAGER,
-          topic0: TROVE_UPDATED_TOPIC,
-          topic1: '0x000000000000000000000000' + address.slice(2),
-          apikey: process.env.CRONOSCAN_API_KEY
-        }
-      });
-  
-      if (response.data.result && Array.isArray(response.data.result) && response.data.result.length > 0) {
-        const sortedLogs = response.data.result.sort((a, b) => 
-          parseInt(b.blockNumber, 16) - parseInt(a.blockNumber, 16)
-        );
-  
-        const mostRecent = sortedLogs[0];
-        const decodedData = web3.eth.abi.decodeParameters(
-          ['uint256', 'uint256', 'uint256', 'uint8'],
-          mostRecent.data
-        );
-  
-        console.log(`Successfully found previous state via API for block ${blockNumber} on attempt ${attempt + 1}`);
-        return {
-          txHash: mostRecent.transactionHash,
-          blockNumber: parseInt(mostRecent.blockNumber, 16),
-          timestamp: parseInt(mostRecent.timeStamp, 16),
-          debt: web3.utils.fromWei(decodedData[0], 'ether'),
-          collateral: web3.utils.fromWei(decodedData[1], 'ether')
-        };
+
+async function fetchAllStateChanges(address, beforeBlock) {
+  // Fetch from both contracts in parallel
+  const [troveResponse, redemptionResponse] = await Promise.all([
+    axios.get('https://api.cronoscan.com/api', {
+      params: {
+        module: 'logs',
+        action: 'getLogs',
+        fromBlock: 0,
+        toBlock: beforeBlock - 1,
+        address: TROVE_MANAGER,
+        topic0: TROVE_UPDATED_TOPIC,
+        topic1: '0x000000000000000000000000' + address.slice(2),
+        apikey: process.env.CRONOSCAN_API_KEY
       }
-  
-      // if no tx found: Use the closest transaction to the redemption found in the trove lifecycle events
-      if (allTroveEvents.length > 0) {
-        // Find the most recent event before the redemption
-        const previousEvents = allTroveEvents
-          .filter(event => event.blockNumber < blockNumber)
-          .sort((a, b) => b.timestamp - a.timestamp);
-  
-        if (previousEvents.length > 0) {
-          const mostRecentEvent = previousEvents[0];
-          console.log(`Found previous state via trove lifecycle events for block ${blockNumber} on attempt ${attempt + 1}`);
-          return {
-            txHash: mostRecentEvent.txHash,
-            blockNumber: mostRecentEvent.blockNumber,
-            timestamp: mostRecentEvent.timestamp,
-            debt: mostRecentEvent.debt,
-            collateral: mostRecentEvent.collateral,
-            source: 'trove-lifecycle'
-          };
-        }
+    }),
+    axios.get('https://api.cronoscan.com/api', {
+      params: {
+        module: 'logs',
+        action: 'getLogs',
+        fromBlock: 0,
+        toBlock: beforeBlock - 1,
+        address: REDEMPTION_CONTRACT,
+        topic0: TROVE_UPDATED_TOPIC,
+        topic1: '0x000000000000000000000000' + address.slice(2),
+        apikey: process.env.CRONOSCAN_API_KEY
       }
-  
-      // If we still haven't found the state and haven't hit max retries, try again
-      if (attempt < maxRetries) {
-        console.log(`No state found on attempt ${attempt + 1}, retrying...`);
-        await delay(2000); // Longer delay between retries
-        return findPreviousTroveState(address, blockNumber, allTroveEvents, attempt + 1, maxRetries);
-      }
-  
-      console.warn(`No previous state found for block ${blockNumber} after ${attempt + 1} attempts using either method`);
-      return null;
-  
-    } catch (error) {
-      console.error(`Error finding previous state on attempt ${attempt + 1}:`, error);
-      
-      // Retry on error if we haven't hit max retries
-      if (attempt < maxRetries) {
-        console.log(`Error on attempt ${attempt + 1}, retrying...`);
-        await delay(2000);
-        return findPreviousTroveState(address, blockNumber, allTroveEvents, attempt + 1, maxRetries);
-      }
-      
-      return null;
+    })
+  ]);
+
+  const troveEvents = (troveResponse.data.result || []).map(parseEventData);
+  const redemptionEvents = (redemptionResponse.data.result || []).map(parseEventData);
+
+  // Combine and sort all events by block number (most recent first)
+  return [...troveEvents, ...redemptionEvents]
+    .sort((a, b) => b.blockNumber - a.blockNumber);
+}
+
+export async function findPreviousTroveState(address, blockNumber, allTroveEvents = []) {
+  try {
+    console.log(`Looking for previous state before block ${blockNumber} for address ${address}`);
+
+    // First check the provided events array
+    const priorEvents = allTroveEvents
+      .filter(event => event.blockNumber < blockNumber)
+      .sort((a, b) => b.blockNumber - a.blockNumber);
+
+    if (priorEvents.length > 0) {
+      const mostRecentEvent = priorEvents[0];
+      return {
+        txHash: mostRecentEvent.txHash,
+        blockNumber: mostRecentEvent.blockNumber,
+        timestamp: mostRecentEvent.timestamp,
+        debt: mostRecentEvent.debt,
+        collateral: mostRecentEvent.collateral,
+        source: mostRecentEvent.operation === 3 ? 'redemption' : 'trove-lifecycle'
+      };
     }
+
+    // If no events found in provided array, fetch from both contracts
+    await delay(1000);
+    const allStateChanges = await fetchAllStateChanges(address, blockNumber);
+
+    if (allStateChanges.length > 0) {
+      const mostRecent = allStateChanges[0];
+      return {
+        txHash: mostRecent.txHash,
+        blockNumber: mostRecent.blockNumber,
+        timestamp: mostRecent.timestamp,
+        debt: mostRecent.debt,
+        collateral: mostRecent.collateral,
+        source: mostRecent.operation === 3 ? 'redemption' : 'api'
+      };
+    }
+
+    throw new Error(`Could not find previous state for trove ${address} before block ${blockNumber}`);
+
+  } catch (error) {
+    console.error(`Error finding previous state:`, error);
+    throw error;
   }
+}
 
 export async function getRecentRedemptions(limit = 50, onProgress, signal, startFromIndex = -1) {
     const web3 = new Web3();
