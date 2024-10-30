@@ -12,7 +12,7 @@ export default function RedemptionSummary({ events }) {
         collateral: redemption.collateral,
         debt: redemption.debt
       });
-  
+
       const collateralRedeemed = Math.abs(parseFloat(previousState.collateral) - parseFloat(redemption.collateral));
       const debtReduced = Math.abs(parseFloat(previousState.debt) - parseFloat(redemption.debt));
   
@@ -25,7 +25,18 @@ export default function RedemptionSummary({ events }) {
   
       return { collateralRedeemed, debtReduced };
     };
-  
+    const formatDate = (timestamp) => {
+        const date = new Date(timestamp * 1000);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const month = months[date.getUTCMonth()];
+        const day = date.getUTCDate().toString().padStart(2, '0');
+        const year = date.getUTCFullYear();
+        const hours = date.getUTCHours().toString().padStart(2, '0');
+        const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+        const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+
+        return `${month}-${day}-${year} ${hours}:${minutes}:${seconds} UTC`;
+    };
     return (
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
         <h2 className="text-2xl font-bold mb-4 text-white">Redemption Summary</h2>
@@ -62,8 +73,8 @@ export default function RedemptionSummary({ events }) {
                       : 'PARTIAL'} Redemption
                   </div>
                   <div className="text-sm text-gray-300">
-                    Time: {date}
-                  </div>
+            Time: {formatDate(redemption.timestamp)}
+        </div>
                   <div className="text-sm text-gray-300">
                     Tx: <a 
                       href={`https://cronoscan.com/tx/${redemption.txHash}`}

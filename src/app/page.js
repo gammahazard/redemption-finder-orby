@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import TabNav from '@/components/TabNav';
 import History from '@/components/History';
 import { findAllTroveEvents, findRedemptionEvents, findPreviousTroveState } from '@/lib/troveUtils';
+import Image from 'next/image';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('search');
@@ -121,12 +122,22 @@ export default function Home() {
         </>
       )}
 
-      {(troveEvents.length > 0 || redemptionEvents.length > 0) && (
-        <footer className="mt-8 text-center text-gray-500 text-sm">
-          <p>All times shown in your local timezone</p>
-          <p>Data sourced from Cronos blockchain</p>
-        </footer>
-      )}
+{(troveEvents.length > 0 || redemptionEvents.length > 0) && (
+    <footer className="mt-8 text-center text-gray-500 text-sm">
+        <p>All times shown in UTC timezone</p>
+        <div className="flex items-center justify-center gap-2 mt-1">
+            <span>Data sourced from
+        Cronos blockchain</span>
+            <Image 
+                src="/cro-logo.png" 
+                alt="Cronos Logo" 
+                width={16} 
+                height={16} 
+                className="inline-block"
+            />
+        </div>
+    </footer>
+)}
     </>
   );
 
