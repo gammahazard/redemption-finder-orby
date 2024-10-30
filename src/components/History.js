@@ -5,6 +5,7 @@ import { getRecentRedemptions } from '@/lib/troveUtils';
 import axios from 'axios';
 
 export default function History() {
+  // All state declarations stay the same
   const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -17,6 +18,7 @@ export default function History() {
   const [abortController, setAbortController] = useState(null);
   const [searchStopped, setSearchStopped] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
 
   // All your existing functions stay exactly the same
   const startSearch = async (startFromIndex = -1) => {
@@ -208,12 +210,13 @@ export default function History() {
   };
 
   return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+      {/* Updated header with responsive layout */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <h2 className="text-2xl font-bold text-white">Recent Redemptions</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full md:w-auto">
           {(loading || progress.message) && (
-            <div className="text-sm text-gray-400">
+            <div className="text-sm text-gray-400 break-words">
               {progress.message}
               {progress.total > 0 && loading && (
                 <div className="text-xs mt-1">
@@ -222,7 +225,7 @@ export default function History() {
               )}
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {loading ? (
               <button
                 onClick={handleStopSearch}
@@ -266,12 +269,12 @@ export default function History() {
       </div>
       
       {error && (
-        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded mb-4">
+        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded mb-4 break-words">
           {error}
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {redemptions.length === 0 && !loading ? (
           <div className="text-center text-gray-400 py-8">
             No redemptions found
@@ -279,8 +282,8 @@ export default function History() {
         ) : (
           redemptions.map((redemption) => (
             <div key={redemption.id} className="border-l-4 border-green-500 pl-4 bg-gray-700/30 p-4 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div>
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                <div className="break-words">
                   <div className="font-semibold text-white mb-1">
                     {redemption.currentState.collateral === "0" && redemption.currentState.debt === "0" 
                       ? 'FULL' 
@@ -289,7 +292,7 @@ export default function History() {
                   <div className="text-sm text-gray-300">
                     Time: {formatTimestamp(redemption.timestamp)}
                   </div>
-                  <div className="text-sm text-gray-300">
+                  <div className="text-sm text-gray-300 break-all">
                     Tx: <a 
                       href={`https://cronoscan.com/tx/${redemption.txHash}`}
                       target="_blank"
@@ -300,22 +303,24 @@ export default function History() {
                     </a>
                   </div>
                 </div>
-                <div className="text-sm">
-                  <a
-                    href={`https://cronoscan.com/address/${redemption.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 hover:underline"
-                  >
-                    Trove: {formatAddress(redemption.address)}
-                  </a>
+                <div className="text-sm space-y-2">
+                  <div>
+                    <a
+                      href={`https://cronoscan.com/address/${redemption.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 hover:underline break-all"
+                    >
+                      Trove: {formatAddress(redemption.address)}
+                    </a>
+                  </div>
                   {redemption.redeemer && (
-                    <div className="mt-1">
+                    <div>
                       <a
                         href={`https://cronoscan.com/address/${redemption.redeemer}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 hover:underline"
+                        className="text-blue-400 hover:text-blue-300 hover:underline break-all"
                       >
                         Redeemer: {formatAddress(redemption.redeemer)}
                       </a>
@@ -326,7 +331,7 @@ export default function History() {
 
               {redemption.previousState ? (
                 <div className="mt-4 space-y-4">
-                  <div className="bg-gray-800/50 p-3 rounded">
+                  <div className="bg-gray-800/50 p-3 rounded break-words">
                     <div className="font-medium text-white mb-2">State Before Redemption:</div>
                     <div className="text-gray-300">
                       Collateral: {parseFloat(redemption.previousState.collateral).toFixed(4)} CDCETH
@@ -336,7 +341,7 @@ export default function History() {
                     </div>
                   </div>
 
-                  <div className="bg-gray-800/50 p-3 rounded">
+                  <div className="bg-gray-800/50 p-3 rounded break-words">
                     <div className="font-medium text-white mb-2">After Redemption:</div>
                     <div className="text-gray-300">
                       Collateral: {parseFloat(redemption.currentState.collateral).toFixed(4)} CDCETH
@@ -346,7 +351,7 @@ export default function History() {
                     </div>
                   </div>
 
-                  <div className="bg-gray-800/50 p-3 rounded">
+                  <div className="bg-gray-800/50 p-3 rounded break-words">
                     <div className="font-medium text-white mb-2">Impact:</div>
                     <div className="text-gray-300">
                       Collateral Redeemed: {(parseFloat(redemption.previousState.collateral) - parseFloat(redemption.currentState.collateral)).toFixed(4)} CDCETH
@@ -357,7 +362,7 @@ export default function History() {
                   </div>
                 </div>
               ) : (
-                <div className="mt-4 p-3 bg-yellow-900/20 border-l-4 border-yellow-600 rounded">
+                <div className="mt-4 p-3 bg-yellow-900/20 border-l-4 border-yellow-600 rounded break-words">
                   <p className="text-yellow-200">Previous state data not available</p>
                 </div>
               )}
