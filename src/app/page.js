@@ -5,9 +5,12 @@ import AddressSearch from '@/components/AddressSearch';
 import TroveLifecycle from '@/components/TroveLifecycle';
 import RedemptionSummary from '@/components/RedemptionSummary';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import TabNav from '@/components/TabNav';
+import History from '@/components/History';
 import { findAllTroveEvents, findRedemptionEvents, findPreviousTroveState } from '@/lib/troveUtils';
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState('search');
   const [loading, setLoading] = useState(false);
   const [loadingState, setLoadingState] = useState('');
   const [troveEvents, setTroveEvents] = useState([]);
@@ -21,18 +24,15 @@ export default function Home() {
       setTroveEvents([]);
       setRedemptionEvents([]);
       
-      // Get trove events first
       setLoadingState('Searching for Trove interactions...');
       const troveData = await findAllTroveEvents(address);
       const sortedTroveData = troveData.sort((a, b) => a.timestamp - b.timestamp);
       setTroveEvents(sortedTroveData);
       setLoadingState(`Found ${troveData.length} Trove interactions. Searching for redemptions...`);
       
-      // Get redemption events
       const redemptionData = await findRedemptionEvents(address);
       setLoadingState(`Found ${redemptionData.length} redemptions. Analyzing previous states...`);
       
-      // Get previous states for each redemption, passing the trove events
       const enrichedRedemptions = await Promise.all(
         redemptionData.map(async (redemption, index) => {
           setLoadingState(`Analyzing state before redemption ${index + 1} of ${redemptionData.length}...`);
@@ -51,12 +51,8 @@ export default function Home() {
     }
   };
 
-  return (
-    <main className="min-h-screen p-8 bg-gray-900">
-      <h1 className="text-4xl font-bold mb-8 text-center text-gray-100">
-        Trove Analytics
-      </h1>
-      
+  const renderSearchTab = () => (
+    <>
       <AddressSearch onSearch={handleSearch} />
       
       {error && (
@@ -97,7 +93,7 @@ export default function Home() {
           {redemptionEvents.length > 0 && (
             <RedemptionSummary 
               events={redemptionEvents}
-              troveEvents={troveEvents} // Pass trove events to help with state lookups
+              troveEvents={troveEvents}
             />
           )}
         </>
@@ -109,6 +105,18 @@ export default function Home() {
           <p>Data sourced from Cronos blockchain</p>
         </footer>
       )}
+    </>
+  );
+
+  return (
+    <main className="min-h-screen p-8 bg-gray-900">
+      <h1 className="text-4xl font-bold mb-8 text-center text-gray-100">
+        Trove Analytics
+      </h1>
+      
+      <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
+      
+      {activeTab === 'search' ? renderSearchTab() : <History />}
     </main>
   );
 }
