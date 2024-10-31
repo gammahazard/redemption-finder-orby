@@ -322,7 +322,7 @@ export default function History() {
                         rel="noopener noreferrer"
                         className="text-blue-400 hover:text-blue-300 hover:underline break-all"
                       >
-                        Redeemer: {formatAddress(redemption.redeemer)}
+                        {/* Redeemer: {formatAddress(redemption.redeemer)} */}
                       </a>
                     </div>
                   )}

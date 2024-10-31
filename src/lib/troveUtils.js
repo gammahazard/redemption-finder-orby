@@ -280,11 +280,19 @@ export async function getRecentRedemptions(limit = 50, onProgress, signal, start
           return existingEvents;
         }
 
-        const prevState = await findPreviousTroveState(
-          address, 
-          blockNumber,
-          []
-        );
+ const addressEvents = await findAllTroveEvents(address);
+const redemptionEvents = (await findRedemptionEvents(address))
+  .filter(e => e.blockNumber < blockNumber);
+
+// Combine and sort events
+const allEvents = [...addressEvents, ...redemptionEvents]
+  .sort((a, b) => a.timestamp - b.timestamp);
+
+const prevState = await findPreviousTroveState(
+  address, 
+  blockNumber,
+  allEvents
+);
   
         if (signal?.aborted) {
           return existingEvents;
