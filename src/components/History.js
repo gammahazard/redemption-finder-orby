@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { getRecentRedemptions } from '@/lib/troveUtils';
 import axios from 'axios';
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function History() {
-  // All state declarations stay the same
+  // Existing state
   const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,8 +20,30 @@ export default function History() {
   const [searchStopped, setSearchStopped] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  // All your existing functions stay exactly the same
+  // Calculate pagination values
+  const totalPages = Math.ceil(redemptions.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = redemptions.slice(indexOfFirstItem, indexOfLastItem);
+
+  // Pagination controls
+  const goToFirstPage = () => setCurrentPage(1);
+  const goToLastPage = () => setCurrentPage(totalPages);
+  const goToNextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
+
+  // Ensure current page is valid when redemptions change
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [redemptions.length]);
+
+  // Your existing functions remain the same
   const startSearch = async (startFromIndex = -1) => {
     const controller = new AbortController();
     setAbortController(controller);
@@ -108,6 +131,59 @@ export default function History() {
     }
   };
 
+  // Your other existing functions remain the same
+  const handleStopSearch = () => {
+    if (abortController) {
+      abortController.abort();
+      setSearchStopped(true);
+      setLoading(false);
+      setProgress(prev => ({
+        ...prev,
+        message: 'Search paused. Click Resume to continue.',
+        lastProcessedIndex: prev.lastProcessedIndex
+      }));
+  
+      sessionStorage.setItem('redemptionResults', JSON.stringify({
+        redemptions,
+        progress: {
+          ...progress,
+          current: progress.current,
+          lastProcessedIndex: progress.lastProcessedIndex
+        },
+        completed: false
+      }));
+    }
+  };
+
+  const handleResumeSearch = () => {
+    startSearch(progress.lastProcessedIndex);
+  };
+
+  const handleRestartSearch = () => {
+    sessionStorage.removeItem('redemptionResults');
+    setRedemptions([]);
+    setProgress({
+      message: '',
+      current: 0,
+      total: 0,
+      lastProcessedIndex: -1
+    });
+    setCurrentPage(1);
+    startSearch();
+  };
+
+  const handleClearResults = () => {
+    setRedemptions([]);
+    sessionStorage.removeItem('redemptionResults');
+    setProgress(prev => ({
+      ...prev,
+      current: 0,
+      lastProcessedIndex: -1,
+      message: ''
+    }));
+    setCurrentPage(1);
+  };
+
   useEffect(() => {
     const savedResults = sessionStorage.getItem('redemptionResults');
     if (savedResults) {
@@ -140,66 +216,6 @@ export default function History() {
     };
   }, []);
 
-  const handleStopSearch = () => {
-    if (abortController) {
-      // First abort the controller
-      abortController.abort();
-      
-      // Then update UI state
-      setSearchStopped(true);
-      setLoading(false);
-      setProgress(prev => ({
-        ...prev,
-        message: 'Search paused. Click Resume to continue.',
-        // Keep lastProcessedIndex for resume functionality
-        lastProcessedIndex: prev.lastProcessedIndex
-      }));
-  
-      // Update session storage with current state
-      sessionStorage.setItem('redemptionResults', JSON.stringify({
-        redemptions,
-        progress: {
-          ...progress,
-          current: progress.current,
-          lastProcessedIndex: progress.lastProcessedIndex
-        },
-        completed: false
-      }));
-    }
-  };
-
-
-  const handleResumeSearch = () => {
-    startSearch(progress.lastProcessedIndex);
-  };
-
-  const handleRestartSearch = () => {
-    sessionStorage.removeItem('redemptionResults');
-    setRedemptions([]);
-    setProgress({
-      message: '',
-      current: 0,
-      total: 0,
-      lastProcessedIndex: -1
-    });
-    startSearch();
-  };
-
-  // Add the clear results function
-  const handleClearResults = () => {
-    // Clear results and storage
-    setRedemptions([]);
-    sessionStorage.removeItem('redemptionResults');
-    
-    // Only reset progress index/numbers but keep other states unchanged
-    setProgress(prev => ({
-      ...prev,
-      current: 0,
-      lastProcessedIndex: -1,  // Reset this to start fresh
-      message: ''
-    }));
-  };
-
   const formatAddress = (address) => {
     return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Unknown';
   };
@@ -211,7 +227,7 @@ export default function History() {
 
   return (
     <div className="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
-      {/* Updated header with responsive layout */}
+      {/* Header section remains the same */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <h2 className="text-2xl font-bold text-white">Recent Redemptions</h2>
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full md:w-auto">
@@ -274,13 +290,59 @@ export default function History() {
         </div>
       )}
 
+      {/* Pagination controls */}
+      {redemptions.length > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4 text-white">
+          <div className="text-sm text-gray-400 order-2 sm:order-1">
+            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, redemptions.length)} of {redemptions.length}
+          </div>
+          <div className="flex items-center gap-1 order-1 sm:order-2">
+            <button
+              onClick={goToFirstPage}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              aria-label="First page"
+            >
+              <ChevronFirst size={16} />
+            </button>
+            <button
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-3 py-1 bg-gray-700/50 rounded min-w-[90px] text-center text-sm">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              aria-label="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={goToLastPage}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              aria-label="Last page"
+            >
+              <ChevronLast size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4 md:space-y-6">
         {redemptions.length === 0 && !loading ? (
           <div className="text-center text-gray-400 py-8">
             No redemptions found
           </div>
         ) : (
-          redemptions.map((redemption) => (
+          currentItems.map((redemption) => (
             <div key={redemption.id} className="border-l-4 border-green-500 pl-4 bg-gray-700/30 p-4 rounded-lg">
               <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                 <div className="break-words">
@@ -370,6 +432,49 @@ export default function History() {
           ))
         )}
       </div>
+
+      {/* Bottom pagination controls for easier navigation on long pages */}
+      {redemptions.length > 0 && (
+        <div className="flex justify-center mt-6">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={goToFirstPage}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 text-white"
+              aria-label="First page"
+            >
+              <ChevronFirst size={16} />
+            </button>
+            <button
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 text-white"
+              aria-label="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-3 py-1 bg-gray-700/50 rounded min-w-[90px] text-center text-white text-sm">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 text-white"
+              aria-label="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={goToLastPage}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 text-white"
+              aria-label="Last page"
+            >
+              <ChevronLast size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
